@@ -1,94 +1,64 @@
-defmodule Util do
-  def partition(xs, f) do
-    {
-      xs |> Enum.find(f),
-      xs |> Enum.reject(f)
-    }
-  end
+defmodule Graph do
+  def out(map, {x, y}) do
+    [{0, 1}, {0, -1}, {1, 0}, {-1, 0}]
+      |> Enum.map(fn {ox, oy} ->
+        coord = {x + ox, y + oy}
 
-  def set_size(n) do
-    fn set -> MapSet.size(set) == n end
-  end
-
-  def size_and_subset(n, subset) do
-    fn set -> MapSet.size(set) == n && MapSet.subset?(subset, set) end
-  end
-
-  def tokenize(str) do
-    str
-      |> String.split(" ")
-      |> Enum.map(fn word ->
-        word
-          |> String.split("")
-          |> Enum.filter(&(&1 != ""))
-          |> MapSet.new
+        if Map.has_key?(map, coord) do
+          if Map.fetch!(map, coord) == 9 do
+            nil
+          else
+            coord
+          end
+        else
+          nil
+        end
       end)
+      |> Enum.filter(&(&1 != nil))
   end
-end
 
-defmodule Solve do
-  def solve(string) do
-    [left, right] = String.split(string, " | ")
+  def list_out(map, list) do
+    Enum.flat_map(list, &out(map, &1))
+  end
 
-    sets = Util.tokenize(left)
-    code = Util.tokenize(right)
+  def flood(map, set, coords) do
+    result = list_out(map, coords) |> Enum.reject(&MapSet.member?(set, &1))
 
-    { one, sets } = sets
-      |> Util.partition(Util.set_size(2))
-
-    { four, sets } = sets
-      |> Util.partition(Util.set_size(4))
-
-    { seven, sets } = sets
-      |> Util.partition(Util.set_size(3))
-
-    { eight, sets } = sets
-      |> Util.partition(Util.set_size(7))
-
-    { nine, sets } = sets
-      |> Util.partition(Util.size_and_subset(6, four))
-
-    { zero, sets } = sets
-      |> Util.partition(Util.size_and_subset(6, one))
-
-    { six, sets } = sets
-      |> Util.partition(Util.set_size(6))
-
-    { three, sets } = sets
-      |> Util.partition(Util.size_and_subset(5, one))
-
-    { five, sets } = sets
-      |> Util.partition(fn set -> MapSet.size(set) == 5 && MapSet.subset?(set, six) end)
-
-    [two] = sets
-
-    map = %{
-      zero => 0,
-      one => 1,
-      two => 2,
-      three => 3,
-      four => 4,
-      five => 5,
-      six => 6,
-      seven => 7,
-      eight => 8,
-      nine => 9,
-    }
-
-    code
-      |> Enum.map(fn set -> Map.fetch!(map, set) end)
-      |> Enum.reverse
-      |> Enum.with_index
-      |> Enum.map(fn {n, i} -> n * :math.pow(10, i) end)
-      |> Enum.reduce(&(&1 + &2))
+    if Enum.empty?(result) do
+      set
+    else
+      flood(map, set |> MapSet.union(MapSet.new(result)), result)
+    end
   end
 end
 
 {:ok, text} = File.read("input.txt")
 
-text
+map = text
   |> String.split("\n")
   |> Enum.filter(&(&1 != ""))
-  |> Enum.map(&Solve.solve/1)
-  |> Enum.reduce(&(&1 + &2))
+  |> Enum.with_index
+  |> Enum.reduce(Map.new, fn {line, y}, map  -> line
+    |> String.split("")
+    |> Enum.filter(&(&1 != ""))
+    |> Enum.map(&Integer.parse/1)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.with_index
+    |> Enum.reduce(map, fn {n, x}, map -> Map.put(map, {x, y}, n) end)
+  end)
+
+map
+  |> Enum.filter(fn {{x, y}, v} ->
+    [{0, 1}, {0, -1}, {1, 0}, {-1, 0}] |> Enum.all?(fn {ox, oy} ->
+      coord = {x + ox, y + oy}
+      !Map.has_key?(map, coord) || Map.fetch!(map, coord) > v
+    end)
+  end)
+  |> Enum.map(&elem(&1, 0))
+  |> Enum.map(&Graph.flood(map, MapSet.new, [&1]))
+  |> Enum.map(&MapSet.size/1)
+  |> Enum.sort
+  |> Enum.reverse
+  |> Enum.take(3)
+  |> Enum.product
   |> IO.inspect
