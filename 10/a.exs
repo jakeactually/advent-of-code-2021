@@ -29,10 +29,46 @@ defmodule Parse do
       _ -> {[], str}
     end
   end
+
+  def illegal str do
+    try do
+      {:ok, parse_one str}
+    rescue
+      e in MatchError -> case e.term do
+        {_, [char | _]} -> {:err, char}
+        {_, []} -> {:ok, nil}
+      end
+    end
+  end
+
+  def value str do
+    case str do
+      ")" -> 3
+      "]" -> 57
+      "}" -> 1197
+      ">" -> 25137
+    end
+  end
 end
 
-"[[[[<>({}){}[([])<>]]]]]"
-  |> String.split("")
-  |> Enum.reject(&(&1 == ""))
-  |> Parse.parse_one
+{:ok, text} = File.read("input.txt")
+
+text
+  |> String.split("\n")
+  |> Enum.filter(&(&1 != ""))
+  |> Enum.map(fn line ->
+    line
+      |> String.split("")
+      |> Enum.filter(&(&1 != ""))
+      |> Parse.illegal
+  end)
+  |> Enum.filter(fn result ->
+    case result do
+      {:err, _} -> true
+      _ -> false
+    end
+  end)
+  |> Enum.map(&elem(&1, 1))
+  |> Enum.map(&Parse.value/1)
+  |> Enum.sum
   |> IO.inspect
