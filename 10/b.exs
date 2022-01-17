@@ -1,64 +1,114 @@
-defmodule Graph do
-  def out(map, {x, y}) do
-    [{0, 1}, {0, -1}, {1, 0}, {-1, 0}]
-      |> Enum.map(fn {ox, oy} ->
-        coord = {x + ox, y + oy}
-
-        if Map.has_key?(map, coord) do
-          if Map.fetch!(map, coord) == 9 do
-            nil
-          else
-            coord
-          end
-        else
-          nil
-        end
-      end)
-      |> Enum.filter(&(&1 != nil))
+defmodule Parse do
+  def parse_one [x | xs] do
+    case x do
+      "(" ->
+        {children, [")" | ys]} = parse_many xs
+        {:just, {:paren, children}, ys}
+      "[" ->
+        {children, ["]" | ys]} = parse_many xs
+        {:just, {:box, children}, ys}
+      "{" ->
+        {children, ["}" | ys]} = parse_many xs
+        {:just, {:bracket, children}, ys}
+      "<" ->
+        {children, [">" | ys]} = parse_many xs
+        {:just, {:arrow, children}, ys}
+      _ -> {:nothing}
+    end
   end
 
-  def list_out(map, list) do
-    Enum.flat_map(list, &out(map, &1))
+  def parse_one _ do
+    {:nothing}
   end
 
-  def flood(map, set, coords) do
-    result = list_out(map, coords) |> Enum.reject(&MapSet.member?(set, &1))
+  def parse_one_incomplete [x | xs] do
+    case x do
+      "(" ->
+        {children, ys} = parse_many_incomplete xs
+        {:just, {:paren, children}, ys |> Enum.drop(1)}
+      "[" ->
+        {children, ys} = parse_many_incomplete xs
+        {:just, {:box, children}, ys |> Enum.drop(1)}
+      "{" ->
+        {children, ys} = parse_many_incomplete xs
+        {:just, {:bracket, children}, ys |> Enum.drop(1)}
+      "<" ->
+        {children, ys} = parse_many_incomplete xs
+        {:just, {:arrow, children}, ys |> Enum.drop(1)}
+      _ -> {:nothing}
+    end
+  end
 
-    if Enum.empty?(result) do
-      set
-    else
-      flood(map, set |> MapSet.union(MapSet.new(result)), result)
+  def parse_one_incomplete _ do
+    {:nothing}
+  end
+
+  def parse_many str do
+    case parse_one str do
+      {:just, node, rest} ->
+        {children, new_rest} = parse_many rest
+        {[node | children], new_rest}
+      _ -> {[], str}
+    end
+  end
+
+  def parse_many_incomplete str do
+    case parse_one_incomplete str do
+      {:just, node, rest} ->
+        {children, new_rest} = parse_many_incomplete rest
+        {[node | children], new_rest}
+      _ -> {[], str}
+    end
+  end
+
+  def is_corrupted str do
+    try do
+      parse_one str
+      false
+    rescue
+      e in MatchError -> case e.term do
+        {_, [_ | _]} -> true
+        _ -> false
+      end
+    end
+  end
+
+  def value str do
+    case str do
+      ")" -> 1
+      "]" -> 2
+      "}" -> 3
+      ">" -> 4
+    end
+  end
+
+  def serialize node do
+    case node do
+      {:paren, children} -> ["(" | Enum.flat_map(children, &serialize/1)] ++ [")"]
+      {:box, children} -> ["[" | Enum.flat_map(children, &serialize/1)] ++ ["]"]
+      {:bracket, children} -> ["{" | Enum.flat_map(children, &serialize/1)] ++ ["}"]
+      {:arrow, children} -> ["<" | Enum.flat_map(children, &serialize/1)] ++ [">"]
     end
   end
 end
 
 {:ok, text} = File.read("input.txt")
 
-map = text
+sorted = text
   |> String.split("\n")
   |> Enum.filter(&(&1 != ""))
-  |> Enum.with_index
-  |> Enum.reduce(Map.new, fn {line, y}, map  -> line
-    |> String.split("")
-    |> Enum.filter(&(&1 != ""))
-    |> Enum.map(&Integer.parse/1)
-    |> Enum.map(&elem(&1, 0))
-    |> Enum.with_index
-    |> Enum.reduce(map, fn {n, x}, map -> Map.put(map, {x, y}, n) end)
+  |> Enum.map(fn line ->
+    line
+      |> String.split("")
+      |> Enum.filter(&(&1 != ""))
   end)
-
-map
-  |> Enum.filter(fn {{x, y}, v} ->
-    [{0, 1}, {0, -1}, {1, 0}, {-1, 0}] |> Enum.all?(fn {ox, oy} ->
-      coord = {x + ox, y + oy}
-      !Map.has_key?(map, coord) || Map.fetch!(map, coord) > v
-    end)
+  |> Enum.reject(&Parse.is_corrupted/1)
+  |> Enum.map(fn line ->
+    {children, _} = Parse.parse_many_incomplete line
+    complete = Enum.flat_map(children, &Parse.serialize/1)
+    suffix = Enum.drop(complete, length line)
+    Enum.reduce(suffix, 0, fn x, xs -> xs * 5 + Parse.value x end)
   end)
-  |> Enum.map(&elem(&1, 0))
-  |> Enum.map(&Graph.flood(map, MapSet.new, [&1]))
-  |> Enum.map(&MapSet.size/1)
   |> Enum.sort
-  |> Enum.reverse
-  |> Enum.take(3)
-  |> Enum.product
-  |> IO.inspect
+
+IO.inspect(Enum.fetch!(sorted, floor(length(sorted) / 2)))
