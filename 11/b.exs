@@ -1,114 +1,88 @@
-defmodule Parse do
-  def parse_one [x | xs] do
-    case x do
-      "(" ->
-        {children, [")" | ys]} = parse_many xs
-        {:just, {:paren, children}, ys}
-      "[" ->
-        {children, ["]" | ys]} = parse_many xs
-        {:just, {:box, children}, ys}
-      "{" ->
-        {children, ["}" | ys]} = parse_many xs
-        {:just, {:bracket, children}, ys}
-      "<" ->
-        {children, [">" | ys]} = parse_many xs
-        {:just, {:arrow, children}, ys}
-      _ -> {:nothing}
-    end
-  end
 
-  def parse_one _ do
-    {:nothing}
-  end
 
-  def parse_one_incomplete [x | xs] do
-    case x do
-      "(" ->
-        {children, ys} = parse_many_incomplete xs
-        {:just, {:paren, children}, ys |> Enum.drop(1)}
-      "[" ->
-        {children, ys} = parse_many_incomplete xs
-        {:just, {:box, children}, ys |> Enum.drop(1)}
-      "{" ->
-        {children, ys} = parse_many_incomplete xs
-        {:just, {:bracket, children}, ys |> Enum.drop(1)}
-      "<" ->
-        {children, ys} = parse_many_incomplete xs
-        {:just, {:arrow, children}, ys |> Enum.drop(1)}
-      _ -> {:nothing}
-    end
-  end
+defmodule Util do
+  @dirs [
+    {0, 1}, {0, -1}, {1, 0}, {-1, 0},
+    {-1, -1}, {1, -1}, {1, 1}, {-1, 1},
+  ]
 
-  def parse_one_incomplete _ do
-    {:nothing}
-  end
+  def plus(map, coord) do
+    if Map.has_key?(map, coord) do
+      point = Map.fetch!(map, coord)
 
-  def parse_many str do
-    case parse_one str do
-      {:just, node, rest} ->
-        {children, new_rest} = parse_many rest
-        {[node | children], new_rest}
-      _ -> {[], str}
-    end
-  end
+      if point == 9 do
+        map = Map.delete(map, coord)
 
-  def parse_many_incomplete str do
-    case parse_one_incomplete str do
-      {:just, node, rest} ->
-        {children, new_rest} = parse_many_incomplete rest
-        {[node | children], new_rest}
-      _ -> {[], str}
-    end
-  end
+        map = @dirs |> Enum.reduce(map, fn {ox, oy}, acc_map ->
+          {x, y} = coord
+          new_coord = {x + ox, y + oy}
+          plus(acc_map, new_coord)
+        end)
 
-  def is_corrupted str do
-    try do
-      parse_one str
-      false
-    rescue
-      e in MatchError -> case e.term do
-        {_, [_ | _]} -> true
-        _ -> false
+        Map.put(map, coord, point + 1)
+      else
+        Map.put(map, coord, point + 1)
       end
+    else
+      map
     end
   end
 
-  def value str do
-    case str do
-      ")" -> 1
-      "]" -> 2
-      "}" -> 3
-      ">" -> 4
+  def floor(map, coord) do
+    if Map.has_key?(map, coord) do
+      point = Map.fetch!(map, coord)
+
+      if point > 9 do
+        Map.put(map, coord, 0)
+      else
+        Map.put(map, coord, point)
+      end
+    else
+      map
     end
   end
 
-  def serialize node do
-    case node do
-      {:paren, children} -> ["(" | Enum.flat_map(children, &serialize/1)] ++ [")"]
-      {:box, children} -> ["[" | Enum.flat_map(children, &serialize/1)] ++ ["]"]
-      {:bracket, children} -> ["{" | Enum.flat_map(children, &serialize/1)] ++ ["}"]
-      {:arrow, children} -> ["<" | Enum.flat_map(children, &serialize/1)] ++ [">"]
+  def loop(map, i) do
+    new_map = map
+      |> Map.keys
+      |> Enum.reduce(map, fn coord, acc_map ->
+        Util.plus(acc_map, coord)
+      end)
+
+    new_flashed = new_map
+      |> Map.keys
+      |> Enum.filter(fn coord ->
+        Map.fetch!(new_map, coord) > 9
+      end)
+      |> length
+
+    if new_flashed == 100 do
+      i
+    else
+      result = new_map
+        |> Map.keys
+        |> Enum.reduce(new_map, fn coord, acc_map ->
+          Util.floor(acc_map, coord)
+        end)
+
+      loop(result, i + 1)
     end
   end
 end
 
 {:ok, text} = File.read("input.txt")
 
-sorted = text
+map = text
   |> String.split("\n")
   |> Enum.filter(&(&1 != ""))
-  |> Enum.map(fn line ->
-    line
-      |> String.split("")
-      |> Enum.filter(&(&1 != ""))
+  |> Enum.with_index
+  |> Enum.reduce(Map.new, fn {line, y}, map  -> line
+    |> String.split("")
+    |> Enum.filter(&(&1 != ""))
+    |> Enum.map(&Integer.parse/1)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.with_index
+    |> Enum.reduce(map, fn {n, x}, map -> Map.put(map, {x, y}, n) end)
   end)
-  |> Enum.reject(&Parse.is_corrupted/1)
-  |> Enum.map(fn line ->
-    {children, _} = Parse.parse_many_incomplete line
-    complete = Enum.flat_map(children, &Parse.serialize/1)
-    suffix = Enum.drop(complete, length line)
-    Enum.reduce(suffix, 0, fn x, xs -> xs * 5 + Parse.value x end)
-  end)
-  |> Enum.sort
 
-IO.inspect(Enum.fetch!(sorted, floor(length(sorted) / 2)))
+IO.inspect(Util.loop(map, 1))
