@@ -2,6 +2,17 @@
 
 folds = [
   {655, 0},
+  {0, 447},
+  {327, 0},
+  {0, 223},
+  {163, 0},
+  {0, 111},
+  {81, 0},
+  {0, 55},
+  {40, 0},
+  {0, 27},
+  {0, 13},
+  {0, 6}
 ]
 
 set = text
@@ -24,10 +35,10 @@ set = text
 
   |> MapSet.new
 
-0..20 |> Enum.each(fn y ->
+0..8 |> Enum.each(fn y ->
   0..40
   |> Enum.map(fn x ->
-    if MapSet.member?(set, {x, y}) do "*" else "." end
+    if MapSet.member?(set, {x, y}) do "*" else " " end
   end)
   |> Enum.join
   |> IO.inspect
