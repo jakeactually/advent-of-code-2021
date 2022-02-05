@@ -1,17 +1,11 @@
 defmodule Util do
   def expand map, [a | [b | xs]] do
-    key = "#{a}#{b}"
-
-    if Map.has_key?(map, key) do
-      c = Map.fetch!(map, key)
-      [a | [c | expand(map, [b | xs])]]
-    else
-      [a | expand(map, [b | xs])]
-    end
+    ab = Map.fetch!(map, "#{a}#{b}")
+    [a | [ab | expand(map, [b | xs])]]
   end
 
-  def expand _, _ do
-    []
+  def expand _, xs do
+    xs
   end
 end
 
@@ -26,4 +20,13 @@ map = text
   end)
   |> Map.new
 
-Util.expand(map, ["N", "N", "C", "B"]) |> IO.inspect
+start = "SNPVPFCPPKSBNSPSPSOF"
+  |> String.split("")
+  |> Enum.filter(&(&1 != ""))
+
+lens = 0..9
+  |> Enum.reduce(start, fn _, xs -> Util.expand(map, xs) end)
+  |> Enum.group_by(&(&1))
+  |> Enum.map(fn {_, v} -> length v end)
+
+IO.inspect (Enum.max(lens) - Enum.min(lens))
