@@ -1,4 +1,4 @@
-from typing_extensions import Self
+from path import Path
 
 matrix = [
     [ int(char) for char in row if char != '\n' ]
@@ -13,17 +13,6 @@ distances = [
 ]
 
 distances[0][0] = 0
-
-class Path:
-    def __init__(self, x, y) -> None:
-        self.x = x
-        self.y = y
-
-    def __eq__(self, __o: Self) -> bool:
-        return self.x == __o.x and self.y == __o.y
-
-    def __hash__(self) -> int:
-        return self.y * 1000 + self.x
 
 def add_point(point):
     candidate = matrix[point.y][point.x] + distances[path.y][path.x]
