@@ -86,4 +86,8 @@ defmodule ListZipper do
 
   # If n is out of bounds, return zipper unchanged
   def go_to(zipper, _n), do: zipper
+
+  def to_list(%ListZipper{left: left, current: current, right: right}) do
+    left ++ [current | right]
+  end
 end
