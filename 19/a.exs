@@ -1,3 +1,5 @@
+# skipped
+
 # elixir -r util.exs a.exs
 
 file_path = "input.txt"
